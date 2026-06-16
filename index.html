@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <title>FC 吞食天地：網頁版</title>
+    <script src="https://cdn.jsdelivr.net/npm/phaser@3.60.0/dist/phaser.min.js"></script>
+    <style>
+        body { margin: 0; background-color: #000; display: flex; justify-content: center; align-items: center; height: 100vh; }
+        canvas { image-rendering: pixelated; } /* 確保像素圖放大時不會模糊，完美還原FC質感 */
+    </style>
+</head>
+<body>
+
+<script>
+// 遊戲核心設定
+const config = {
+    type: Phaser.AUTO,
+    width: 256,          // 模仿 FC 紅白機的真實解析度（超省解析度與流量）
+    height: 240,
+    zoom: 3,             // 放大 3 倍顯示，方便在現代螢幕上遊玩
+    pixelArt: true,      // 開啟像素藝術模式
+    physics: {
+        default: 'arcade',
+        arcade: { debug: false }
+    },
+    scene: {
+        preload: preload,
+        create: create,
+        update: update
+    }
+};
+
+const game = new Phaser.Game(config);
+
+// 全域隊伍狀態資料庫（完全不佔空間的純文字資料）
+let playerParty = [
+    { name: "劉備", force: 120, intel: 160, hp: 1500, maxHp: 1500 },
+    { name: "關羽", force: 245, intel: 180, hp: 2200, maxHp: 2200 },
+    { name: "張飛", force: 250, intel: 75,  hp: 2100, maxHp: 2100 }
+];
+
+function preload() {
+    // 這裡未來用來載入你的像素小圖
+    // 範例：this.load.image('map_tiles', 'assets/tiles.png');
+}
+
+function create() {
+    // 遊戲啟動時觸發
+    this.add.text(20, 100, "吞食天地：孔明傳\n\n按下 ENTER 開始遊戲", {
+        fontFamily: 'Courier',
+        fontSize: '14px',
+        fill: '#ffffff'
+    });
+
+    // 監聽鍵盤
+    this.input.keyboard.on('keydown-ENTER', () => {
+        console.log("出征！進入大地圖...");
+        // 未來在這裡切換到 MapScene
+    });
+}
+
+function update() {
+    // 每秒執行 60 次的遊戲主迴圈（處理輸入、碰撞等）
+}
+</script>
+
+</body>
+</html>
