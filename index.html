@@ -12,17 +12,18 @@
 <body>
 
 <script>
-// 遊戲核心設定
+// 遊戲全域設定
+const TILE_SIZE = 16;  // 每一格是 16x16 像素
+const MAP_WIDTH = 16;  // 地圖寬度 16 格
+const MAP_HEIGHT = 15; // 地圖高度 15 格
+
 const config = {
     type: Phaser.AUTO,
-    width: 256,          // 模仿 FC 紅白機的真實解析度（超省解析度與流量）
-    height: 240,
-    zoom: 3,             // 放大 3 倍顯示，方便在現代螢幕上遊玩
-    pixelArt: true,      // 開啟像素藝術模式
-    physics: {
-        default: 'arcade',
-        arcade: { debug: false }
-    },
+    width: TILE_SIZE * MAP_WIDTH,   // 256 像素
+    height: TILE_SIZE * MAP_HEIGHT, // 240 像素
+    zoom: 3,                        // 放大 3 倍
+    pixelArt: true,
+    parent: 'game-container',
     scene: {
         preload: preload,
         create: create,
@@ -32,35 +33,141 @@ const config = {
 
 const game = new Phaser.Game(config);
 
-// 全域隊伍狀態資料庫（完全不佔空間的純文字資料）
-let playerParty = [
-    { name: "劉備", force: 120, intel: 160, hp: 1500, maxHp: 1500 },
-    { name: "關羽", force: 245, intel: 180, hp: 2200, maxHp: 2200 },
-    { name: "張飛", force: 250, intel: 75,  hp: 2100, maxHp: 2100 }
+// 遊戲狀態變數
+let player;         // 玩家精靈
+let cursors;        // 鍵盤監聽
+let isMoving = false; // 確保角色一次只走一格
+let stepCount = 0;  // 步數計數器，用來計算暗雷
+
+// 0: 平地(灰), 1: 草地(綠，會遇敵), 2: 城堡(黃), 3: 障礙物/牆壁(紅，不能走)
+const mapData = [
+    [3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3],
+    [3,0,0,0,0,0,3,1,1,1,1,1,1,1,1,3],
+    [3,0,2,0,0,0,3,1,1,1,1,1,1,1,1,3],
+    [3,0,0,0,0,0,3,1,1,1,1,1,1,1,1,3],
+    [3,3,0,3,3,3,3,1,1,1,1,1,1,1,1,3],
+    [3,0,0,0,0,0,0,0,1,1,1,1,1,1,1,3],
+    [3,0,0,0,0,0,0,0,0,1,1,1,1,1,1,3],
+    [3,0,0,0,0,0,0,0,0,0,0,0,0,0,0,3],
+    [3,1,1,1,1,1,0,0,0,0,0,0,0,2,0,3],
+    [3,1,1,1,1,1,1,1,0,0,0,0,0,0,0,3],
+    [3,1,1,1,1,1,1,1,3,3,3,3,0,0,0,3],
+    [3,1,1,1,1,1,1,1,3,0,0,0,0,0,0,3],
+    [3,1,1,1,1,1,1,1,3,0,0,0,0,0,0,3],
+    [3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3]
 ];
 
 function preload() {
-    // 這裡未來用來載入你的像素小圖
-    // 範例：this.load.image('map_tiles', 'assets/tiles.png');
+    // 不需要載入任何外部圖片，保持 0 體積！
 }
 
 function create() {
-    // 遊戲啟動時觸發
-    this.add.text(20, 100, "吞食天地：孔明傳\n\n按下 ENTER 開始遊戲", {
-        fontFamily: 'Courier',
-        fontSize: '14px',
-        fill: '#ffffff'
-    });
+    // 1. 用純色塊繪製地圖
+    for (let row = 0; row < MAP_HEIGHT; row++) {
+        for (let col = 0; col < MAP_WIDTH; col++) {
+            let tileType = mapData[row][col];
+            let color;
+            if (tileType === 0) color = 0x333333; // 平地：深灰
+            if (tileType === 1) color = 0x116611; // 草地：深綠
+            if (tileType === 2) color = 0xaa8800; // 城堡：金色
+            if (tileType === 3) color = 0x661111; // 障礙：深紅
 
-    // 監聽鍵盤
-    this.input.keyboard.on('keydown-ENTER', () => {
-        console.log("出征！進入大地圖...");
-        // 未來在這裡切換到 MapScene
+            // 畫出地圖格子
+            let rect = this.add.graphics({ fillStyle: { color: color } });
+            rect.fillRect(col * TILE_SIZE, row * TILE_SIZE, TILE_SIZE - 1, TILE_SIZE - 1);
+        }
+    }
+
+    // 2. 建立玩家（劉備），用一個亮綠色方塊代表
+    let playerGraphics = this.add.graphics({ fillStyle: { color: 0x00ff00 } });
+    playerGraphics.fillRect(0, 0, TILE_SIZE - 2, TILE_SIZE - 2);
+    
+    // 將圖形轉為 Phaser 的動態物件
+    player = this.add.container(TILE_SIZE * 2 + 1, TILE_SIZE * 2 + 1); // 初始在地圖 (2,2) 的位置
+    player.add(playerGraphics);
+    
+    // 記錄玩家當前的格子座標
+    player.gridX = 2;
+    player.gridY = 2;
+
+    // 3. 設定鍵盤監聽
+    cursors = this.input.keyboard.createCursorKeys();
+
+    // 4. 畫面文字提示
+    this.add.text(5, 5, "綠方塊=劉備 紅=牆 金=城 綠=草地(遇敵)", {
+        fontSize: '8px',
+        fill: '#ffffff',
+        backgroundColor: '#000000'
     });
 }
 
 function update() {
-    // 每秒執行 60 次的遊戲主迴圈（處理輸入、碰撞等）
+    // 如果角色正在移動中，就不接受新的輸入
+    if (isMoving) return;
+
+    let targetGridX = player.gridX;
+    let targetGridY = player.gridY;
+
+    // 偵測方向鍵
+    if (cursors.left.isDown) {
+        targetGridX--;
+    } else if (cursors.right.isDown) {
+        targetGridX++;
+    } else if (cursors.up.isDown) {
+        targetGridY--;
+    } else if (cursors.down.isDown) {
+        targetGridY++;
+    }
+
+    // 如果座標有變動，嘗試移動
+    if (targetGridX !== player.gridX || targetGridY !== player.gridY) {
+        moveCheck(this, targetGridX, targetGridY);
+    }
+}
+
+// 檢查目標格子是否可走，並執行平滑移動動畫
+function moveCheck(scene, tx, ty) {
+    // 邊界檢查與障礙物檢查（如果是 3 就不能走）
+    if (tx < 0 || tx >= MAP_WIDTH || ty < 0 || ty >= MAP_HEIGHT || mapData[ty][tx] === 3) {
+        return; 
+    }
+
+    isMoving = true;
+    player.gridX = tx;
+    player.gridY = ty;
+
+    // 使用 Phaser 的 Tweens 做平滑的格子移動動畫（移動時間 200 毫秒）
+    scene.tweens.add({
+        targets: player,
+        x: tx * TILE_SIZE + 1,
+        y: ty * TILE_SIZE + 1,
+        duration: 200,
+        onComplete: () => {
+            isMoving = false;
+            checkEncounter(scene, tx, ty); // 移動完成後檢查是否遇敵
+        }
+    });
+}
+
+// 暗雷遇敵邏輯
+function checkEncounter(scene, x, y) {
+    let currentTile = mapData[y][x];
+    
+    // 只有在草地（類型 1）才會遇敵
+    if (currentTile === 1) {
+        stepCount++;
+        console.log(`在草地上走了 ${stepCount} 步`);
+
+        // 模擬經典暗雷：每走一步，有 15% 的機率遇到敵軍
+        if (Math.random() < 0.15) {
+            stepCount = 0;
+            // 畫面閃爍效果，致敬進入戰鬥前的特效
+            scene.cameras.main.flash(300, 255, 255, 255, false, () => {
+                alert("【遭遇敵軍！】進入戰鬥畫面（接下來實作戰鬥系統）");
+                // 未來在這裡切換到 BattleScene
+            });
+        }
+    }
 }
 </script>
 
