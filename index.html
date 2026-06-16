@@ -4,27 +4,29 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, minimal-ui">
     <title>FC 吞食天地：手機網頁版</title>
-    <script src="https://cdn.jsdelivr.net/npm/phaser@3.60.0/dist/phaser.min.js"></script>
+    <script src="phaser.min.js"></script>
     <style>
         * {
-            /* 停用手機瀏覽器的預設觸控選取行為，避免雙擊放大或長按跳出選單 */
             user-select: none;
             -webkit-touch-callout: none;
             touch-action: none;
+            box-sizing: border-box;
         }
-        body { 
-            margin: 0; 
+        html, body {
+            margin: 0;
             padding: 0;
-            background-color: #000; 
-            display: flex; 
-            flex-direction: column; /* 讓遊戲畫面與虛擬按鍵上下排列 */
-            justify-content: center; 
-            align-items: center; 
-            height: 100vh;
+            width: 100%;
+            height: 100%;
+            background-color: #000;
             overflow: hidden;
         }
+        /* 確保遊戲容器牢牢固定在網頁正中央，不被外部框架干擾 */
         #game-container {
-            box-shadow: 0 0 10px rgba(255,255,255,0.2);
+            width: 100%;
+            height: 100%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
         }
     </style>
 </head>
@@ -43,9 +45,8 @@ const config = {
     height: TILE_SIZE * MAP_HEIGHT, // 240
     parent: 'game-container',
     pixelArt: true,
-    // 關鍵：讓 Phaser 自動縮放以適應手機螢幕寬度，同時保持比例
     scale: {
-        mode: Phaser.Scale.FIT,
+        mode: Phaser.Scale.FIT,      // 讓 Phaser 自動等比例放大
         autoCenter: Phaser.Scale.CENTER_BOTH
     },
     scene: {
@@ -61,8 +62,6 @@ let player;
 let cursors;
 let isMoving = false;
 let stepCount = 0;
-
-// 手機虛擬按鍵狀態
 let moveDirection = null; 
 
 const mapData = [
@@ -85,7 +84,7 @@ const mapData = [
 function preload() {}
 
 function create() {
-    // 1. 繪製地圖
+    // 繪製地圖
     for (let row = 0; row < MAP_HEIGHT; row++) {
         for (let col = 0; col < MAP_WIDTH; col++) {
             let tileType = mapData[row][col];
@@ -99,7 +98,7 @@ function create() {
         }
     }
 
-    // 2. 建立玩家
+    // 建立玩家（亮綠色方塊）
     let playerGraphics = this.add.graphics({ fillStyle: { color: 0x00ff00 } });
     playerGraphics.fillRect(0, 0, TILE_SIZE - 2, TILE_SIZE - 2);
     player = this.add.container(TILE_SIZE * 2 + 1, TILE_SIZE * 2 + 1);
@@ -107,10 +106,9 @@ function create() {
     player.gridX = 2;
     player.gridY = 2;
 
-    // 3. 實體鍵盤監聽（保留，電腦也能玩）
     cursors = this.input.keyboard.createCursorKeys();
 
-    // 4. 建立手機專用「虛擬十字鍵」(放於畫面上層)
+    // 呼叫虛擬鍵
     createVirtualJoystick(this);
 }
 
@@ -120,7 +118,6 @@ function update() {
     let targetGridX = player.gridX;
     let targetGridY = player.gridY;
 
-    // 同時支援「鍵盤」與「手機觸控」
     if (cursors.left.isDown || moveDirection === 'LEFT') {
         targetGridX--;
     } else if (cursors.right.isDown || moveDirection === 'RIGHT') {
@@ -162,7 +159,7 @@ function checkEncounter(scene, x, y) {
         stepCount++;
         if (Math.random() < 0.15) {
             stepCount = 0;
-            moveDirection = null; // 遇敵時強制停止移動
+            moveDirection = null;
             scene.cameras.main.flash(300, 255, 255, 255, false, () => {
                 alert("【遭遇敵軍！】進入戰鬥！");
             });
@@ -170,13 +167,12 @@ function checkEncounter(scene, x, y) {
     }
 }
 
-// 📱 核心：用純程式碼畫出手機操控虛擬鍵（不佔用外部圖片）
 function createVirtualJoystick(scene) {
-    const padX = 40;  // 十字鍵在畫面上的 X 位置
-    const padY = 180; // 十字鍵在畫面上的 Y 位置
-    const btnSize = 25;
+    // 這裡微調了虛擬鍵在小畫面中的相對位置，確保它在 240 高度內能被點到
+    const padX = 45;  
+    const padY = 175; 
+    const btnSize = 22;
 
-    // 定義四個方向鍵的按鈕區域與方向
     const buttons = [
         { x: padX, y: padY - btnSize, dir: 'UP', label: '▲' },
         { x: padX, y: padY + btnSize, dir: 'DOWN', label: '▼' },
@@ -185,37 +181,33 @@ function createVirtualJoystick(scene) {
     ];
 
     buttons.forEach(btn => {
-        // 畫出半透明的灰色按鈕外觀
-        let bg = scene.add.graphics({ fillStyle: { color: 0xffffff, alpha: 0.2 } });
+        let bg = scene.add.graphics({ fillStyle: { color: 0xffffff, alpha: 0.25 } });
         bg.fillRect(btn.x - btnSize/2, btn.y - btnSize/2, btnSize, btnSize);
-        bg.lineStyle(1, 0xffffff, 0.4);
+        bg.lineStyle(1, 0xffffff, 0.5);
         bg.strokeRect(btn.x - btnSize/2, btn.y - btnSize/2, btnSize, btnSize);
 
-        // 加上箭頭文字
-        let txt = scene.add.text(btn.x, btn.y, btn.label, { fontSize: '12px', fill: '#fff' }).setOrigin(0.5);
+        scene.add.text(btn.x, btn.y, btn.label, { fontSize: '10px', fill: '#fff' }).setOrigin(0.5);
 
-        // 建立一個隱形的觸控感應區
         let hitArea = scene.add.zone(btn.x, btn.y, btnSize, btnSize).setInteractive();
 
-        // 觸控事件監聽
         hitArea.on('pointerdown', () => { 
             moveDirection = btn.dir; 
             bg.clear();
-            bg.fillStyle(0xffffff, 0.5); // 按下時變亮
+            bg.fillStyle(0xffffff, 0.6);
             bg.fillRect(btn.x - btnSize/2, btn.y - btnSize/2, btnSize, btnSize);
         });
         
         hitArea.on('pointerup', () => { 
             moveDirection = null; 
             bg.clear();
-            bg.fillStyle(0xffffff, 0.2); // 放開時變回半透明
+            bg.fillStyle(0xffffff, 0.25);
             bg.fillRect(btn.x - btnSize/2, btn.y - btnSize/2, btnSize, btnSize);
         });
 
         hitArea.on('pointerout', () => { 
             if (moveDirection === btn.dir) moveDirection = null; 
             bg.clear();
-            bg.fillStyle(0xffffff, 0.2);
+            bg.fillStyle(0xffffff, 0.25);
             bg.fillRect(btn.x - btnSize/2, btn.y - btnSize/2, btnSize, btnSize);
         });
     });
